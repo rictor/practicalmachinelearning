@@ -1,0 +1,508 @@
+---
+title: "Coursera - Practical Machine Learning - Project"
+author: "Riccardo Tortul"
+date: "01 marzo 2016"
+output: html_document
+---
+
+
+```{r, echo=TRUE, }
+
+```
+
+# 
+
+# 
+
+# 
+
+
+###1. Data Preparation
+
+# 
+
+Set seed for repeatability of results.
+
+```{r}
+set.seed(3000)
+```
+
+# 
+
+```{r, include=FALSE, cache=FALSE}
+library(AppliedPredictiveModeling)
+library(caret)
+library(Hmisc)
+library(rattle)
+library(rpart.plot)
+library(e1071)
+library(randomForest)
+```
+
+# 
+
+Change the "empty-cell" representation into the pml.training.csv file for a correct coding of missing values in R. Find and drop variables with high percentage of missing values (more than 90% of the observations). Drop variables not useful for "classe" prediction.
+
+# 
+
+```{r,echo=FALSE}
+input <- read.csv("C:/Users/Riccardo/Desktop/Coursera/Practical Machine Learning/Progetto/pml-training.csv")
+```
+
+# 
+
+```{r}
+check.na <- array(0,dim = dim(input)[2])
+names(check.na) <- names(input)
+
+for(j in 1:length(check.na))
+  check.na[j] <- sum(is.na(input[,j]))/dim(input)[1]
+
+miss <- which(check.na>0)
+
+data <- input[,-c((1:7),miss)]
+
+```
+
+# 
+
+Create training set, test set and validation set. Training set will be use for building the model. Test set will be used for a first evaluation of the models and to combine the different classificators. Validation set will be used for a final evaluation of the classificator.
+
+# 
+
+```{r}
+r1 = createDataPartition(data$classe, p = 0.6)[[1]]
+train    <- data[ r1,]
+data.aux <- data[-r1,]
+
+r2 = createDataPartition(data.aux$classe, p=0.6)[[1]]
+test     <- data.aux[ r2,]
+validate <- data.aux[-r2,]
+```
+
+# 
+
+# 
+
+# 
+
+
+###2. Model Development
+
+# 
+
+Let's consider different classification approaches: lda, qda, rpart, random forest.
+
+# 
+
+```{r, message=FALSE}
+fit.lda <- train(classe ~ ., data=train, method='lda')
+```
+```{r}
+fit.qda <- train(classe ~ ., data=train, method='qda')
+```
+```{r}
+fit.rpart <- rpart(classe ~ ., data=train)
+```
+```{r}
+fit.rf <- randomForest(x = train[,-53], y = train$classe)
+```
+
+# 
+
+Note that these models have been applied also to Standardized and PCA-data. Nevertheless the best results have been obtained applying the models to non-trasformated variables. Here's the accuracy computed on the test set with PCA-values (90% of variability), Standardized values and Raw values:
+
+# 
+
+```{r}
+#	        PC Data    Std Data   Raw Data
+#lda      0.48	     0.69	      0.71
+#qda      0.65	     0.88 	      0.89
+#rpart    0.41	     0.74	      0.75
+#rf       0.78	     0.99	      0.99
+```
+
+# 
+
+```{r, include=FALSE, cache=FALSE}
+result.lda <- data.frame(value = test$classe, fit = predict(fit.lda, test) )
+
+#accuract
+sum(result.lda$value==result.lda$fit)/dim(result.lda)[1]
+
+#
+
+#
+
+#####QDA
+
+
+
+result.qda <- data.frame(value = test$classe, fit = predict(fit.qda, test) )
+
+sum(result.qda$value==result.qda$fit)/dim(result.qda)[1]
+table(result.qda)
+diag(table(result.qda)/rowSums(table(result.qda)))
+diag(t(table(result.qda))/colSums(table(result.qda)))
+
+#
+
+#
+
+#####RPART
+
+
+fancyRpartPlot(fit.rpart)
+
+result.rpart <- data.frame(value = test$classe, fit = predict(fit.rpart, test, 'class') )
+
+sum(result.rpart$value==result.rpart$fit)/dim(result.rpart)[1]
+table(result.rpart)
+diag(table(result.rpart)/rowSums(table(result.rpart)))
+diag(t(table(result.rpart))/colSums(table(result.rpart)))
+
+
+#####RANDOM FOREST
+
+
+fit.rf
+
+varImpPlot(fit.rf)
+fit = predict(fit.rf, test, 'prob')
+fit
+result.rf <- data.frame(value = test$classe, fit = predict(fit.rf, test) )
+
+sum(result.rf$value==result.rf$fit)/dim(result.rf)[1]
+table(result.rf)
+diag(table(result.rf)/rowSums(table(result.rf)))
+diag(t(table(result.rf))/colSums(table(result.rf)))
+```
+
+# 
+
+# 
+
+# 
+
+### 3. Model Combination
+
+# 
+
+Fitted values for validate set:
+
+# 
+
+```{r}
+pred.lda   <- predict(fit.lda  , validate)
+pred.qda   <- predict(fit.qda  , validate)
+pred.rpart <- predict(fit.rpart, validate)
+pred.rf    <- predict(fit.rf,    validate)
+```
+
+# 
+
+Here's the accuracy on validate set (total accuracy and accuracy for each level of 'classe'):
+
+# 
+
+```{r, include=FALSE, cache=FALSE}
+
+result <- array(dim=c(8,6))
+rownames(result) <- c("lda", "qda", "rpart", "rf", "comb.avg", "comb.wavg", "comb.rpart", "comb.rf")
+colnames(result) <- c("total", "A", "B", "C", "D", "E")
+
+result[1,] <- c(total=sum(validate$classe==predict(fit.lda,validate))/dim(validate)[1], diag(table(validate$classe, predict(fit.lda,validate))/rowSums(table(validate$classe, predict(fit.lda,validate)))))
+result[2,] <- c(total=sum(validate$classe==predict(fit.qda,validate))/dim(validate)[1], diag(table(validate$classe, predict(fit.qda,validate))/rowSums(table(validate$classe, predict(fit.qda,validate)))))
+result[3,] <- c(total=sum(validate$classe==predict(fit.rpart,validate, 'class'))/dim(validate)[1], diag(table(validate$classe, predict(fit.rpart,validate,'class'))/rowSums(table(validate$classe, predict(fit.rpart,validate, 'class')))))
+result[4,] <- c(total=sum(validate$classe==predict(fit.rf,validate))/dim(validate)[1], diag(table(validate$classe, predict(fit.rf,validate))/rowSums(table(validate$classe, predict(fit.rf,validate)))))
+```
+
+```{r, echo=FALSE}
+result[1:4,]
+```
+ 
+# 
+
+Now let's consider different possible combinations of the classificators. Nevertheless rf is by far the best classificator: combining the classificators probably won't bring significant improvement.
+
+# 
+
+
+#### Average of fitted probabilities
+
+# 
+
+Fitted probabilities on validate set:
+
+# 
+
+```{r}
+prob.lda   <- predict(fit.lda  , validate, 'prob')
+prob.qda   <- predict(fit.qda  , validate, 'prob')
+prob.rpart <- predict(fit.rpart, validate, 'prob')
+prob.rf    <- predict(fit.rf,    validate, 'prob')
+```
+
+# 
+
+Combined fitted probabilities:
+
+# 
+
+```{r}
+prob.comb.avg   <- (prob.lda + prob.qda + prob.rpart + prob.rf)/4
+```
+
+# 
+ 
+```{r, include=FALSE, cache=FALSE}
+result.comb.avg <- array(dim=dim(validate)[1])
+
+for(i in 1:dim(prob.comb.avg)[1])
+{
+  if(max(prob.comb.avg[i,])==prob.comb.avg[i,]$A)
+    result.comb.avg[i] <- 'A'
+  
+  else if(max(prob.comb.avg[i,])==prob.comb.avg[i,]$B)
+    result.comb.avg[i] <- 'B'
+  
+  else if(max(prob.comb.avg[i,])==prob.comb.avg[i,]$C)
+    result.comb.avg[i] <- 'C'
+  
+  else if(max(prob.comb.avg[i,])==prob.comb.avg[i,]$D)
+    result.comb.avg[i] <- 'D'
+  
+  else if(max(prob.comb.avg[i,])==prob.comb.avg[i,]$E)
+    result.comb.avg[i] <- 'E'
+}
+
+
+
+sum(validate$classe==result.comb.avg)/dim(validate)[1]
+
+
+result[5,] <- c(total=sum(validate$classe==result.comb.avg)/dim(validate)[1], diag(table(validate$classe, result.comb.avg)/rowSums(table(validate$classe, result.comb.avg))))
+```
+
+# 
+
+#### Weighted average of fitted probabilities
+
+Fitted probabilities on validate set:
+
+#
+
+```{r}
+prob.lda   <- predict(fit.lda  , validate, 'prob')
+prob.qda   <- predict(fit.qda  , validate, 'prob')
+prob.rpart <- predict(fit.rpart, validate, 'prob')
+prob.rf    <- predict(fit.rf,    validate, 'prob')
+```
+
+# 
+
+For each classificator the weight is the accuracy computed on the test set:
+
+#
+
+```{r}
+w.lda   <- sum(test$classe==predict(fit.lda, test))/dim(test)[1]
+w.qda   <- sum(test$classe==predict(fit.qda, test))/dim(test)[1]
+w.rpart <- sum(test$classe==predict(fit.rpart, test, 'class'))/dim(test)[1]
+w.rf    <- sum(test$classe==predict(fit.rf, test))/dim(test)[1]
+```
+
+#
+
+Combined fitted probabilities:
+
+#
+
+```{r}
+prob.comb.wavg   <- (w.lda*prob.lda+w.qda*prob.qda+w.rpart*prob.rpart+w.rf*prob.rf)/(w.lda+w.qda+w.rpart+w.rf)
+```
+
+
+```{r, include=FALSE, cache=FALSE}
+result.comb.wavg <- array(dim=dim(validate)[1])
+
+for(i in 1:dim(prob.comb.wavg)[1])
+{
+  if(max(prob.comb.wavg[i,])==prob.comb.wavg[i,]$A)
+    result.comb.wavg[i] <- 'A'
+  else if(max(prob.comb.wavg[i,])==prob.comb.wavg[i,]$B)
+    result.comb.wavg[i] <- 'B'
+  
+  else if(max(prob.comb.wavg[i,])==prob.comb.wavg[i,]$C)
+    result.comb.wavg[i] <- 'C'
+  
+  else if(max(prob.comb.wavg[i,])==prob.comb.wavg[i,]$D)
+    result.comb.wavg[i] <- 'D'
+  
+  else if(max(prob.comb.wavg[i,])==prob.comb.wavg[i,]$E)
+    result.comb.wavg[i] <- 'E'
+}
+
+
+sum(validate$classe==result.comb.wavg)/dim(validate)[1]
+
+table(data.frame(validate$classe, result.comb.wavg))
+
+result[6,] <- c(total=sum(validate$classe==result.comb.wavg)/dim(validate)[1], diag(table(validate$classe, result.comb.wavg)/rowSums(table(validate$classe, result.comb.wavg))))
+
+```
+
+#
+
+
+#### Model combination through rpart
+
+#
+
+Fitted classes on test set:
+
+```{r}
+pred.lda   <- predict(fit.lda  , test)
+pred.qda   <- predict(fit.qda  , test)
+pred.rpart <- predict(fit.rpart, test, 'class')
+pred.rf    <- predict(fit.rf   , test)
+```
+
+
+```{r}
+data.comb <- data.frame(classe=test$classe, pred.lda, pred.qda, pred.rpart, pred.rf)
+```
+
+# 
+
+Fitted classes on validate set:
+
+# 
+
+```{r}
+pred.lda   <- predict(fit.lda  , validate)
+pred.qda   <- predict(fit.qda  , validate)
+pred.rpart <- predict(fit.rpart, validate,'class')
+pred.rf    <- predict(fit.rf   , validate)
+```
+
+```{r}
+validate.comb <- data.frame(classe=validate$classe, pred.lda, pred.qda, pred.rpart, pred.rf)
+```
+
+# 
+
+Model combination through rpart:
+
+# 
+
+```{r}
+
+fit.combined.rpart <- rpart(classe ~ ., data=data.comb)
+```
+
+```{r, include=FALSE, cache=FALSE}
+
+result.combined.rpart <- data.frame(value = validate$classe, fit = predict(fit.combined.rpart, validate.comb,'class') )
+
+sum(result.combined.rpart$value==result.combined.rpart$fit)/dim(result.combined.rpart)[1]
+
+result[7,] <- c(total=sum(validate$classe==predict(fit.combined.rpart, validate.comb,'class'))/dim(validate)[1], diag(table(validate$classe, predict(fit.combined.rpart, validate.comb,'class'))/rowSums(table(validate$classe, predict(fit.combined.rpart, validate.comb,'class')))))
+```
+
+# 
+
+# 
+
+# 
+
+#### Model combination through random forest
+
+# 
+
+Fitted classes on test set:
+
+```{r}
+pred.lda   <- predict(fit.lda  , test)
+pred.qda   <- predict(fit.qda  , test)
+pred.rpart <- predict(fit.rpart, test, 'class')
+pred.rf    <- predict(fit.rf   , test)
+```
+
+
+```{r}
+data.comb <- data.frame(classe=test$classe, pred.lda, pred.qda, pred.rpart, pred.rf)
+```
+
+# 
+
+Fitted classes on validate set:
+
+# 
+
+```{r}
+pred.lda   <- predict(fit.lda  , validate)
+pred.qda   <- predict(fit.qda  , validate)
+pred.rpart <- predict(fit.rpart, validate,'class')
+pred.rf    <- predict(fit.rf   , validate)
+```
+
+```{r}
+validate.comb <- data.frame(classe=validate$classe, pred.lda, pred.qda, pred.rpart, pred.rf)
+```
+
+# 
+
+Model combination through random forest:
+
+# 
+
+```{r}
+
+fit.combined.rpart <- randomForest(classe ~ ., data=data.comb)
+```
+
+```{r, include=FALSE, cache=FALSE}
+
+fit.combined.rf <- randomForest(classe ~ ., data=data.comb)
+fit.combined.rf
+
+result.combined.rf <- data.frame(value = validate$classe, fit = predict(fit.combined.rf, validate.comb) )
+
+result[8,] <- c(total=sum(validate$classe==predict(fit.combined.rf, validate.comb))/dim(validate)[1], diag(table(validate$classe, predict(fit.combined.rf, validate.comb))/rowSums(table(validate$classe, predict(fit.combined.rf, validate.comb)))))
+
+result <- data.frame(result)
+```
+
+# 
+
+# 
+
+### 4. Results evaluation
+
+# 
+
+See below the accuracy computed on the validate set for the simple models and combined models. Since the random forest model has by far the best accuracy, average and weighted average of fitted probabilities brings to worse results. Models combination through rpart brings to the same result of the simple random forest approach: at each step of the combination tree the chosen variable is the class predicted by the random forest. Finally, models combination through random forest brings to little improvement. We have to chose between the "simple random forest" and the "models combination through random forest". The second approach bring to a 0.05 percentage points improvement from the accuracy point of view. On the other hand the "simple random forest" ensures a really high accuracy and, since the number of observation of the pml-training dataset is not that big, probably permits to build a more robust model. Given this facts, for the "occam razor rule" the chosen model is the "simple"random forest".
+
+# 
+ 
+```{r, echo=FALSE}
+plot(result$total, ylim=c(0.5,1.1), type='b', xlab='Method', ylab='Accuracy', xaxt='n', lty=1, pch=19)
+points(result$A, type='l', lty=3, col=2)
+points(result$B, type='l', lty=3, col=3)
+points(result$C, type='l', lty=3, col=4)
+points(result$D, type='l', lty=3, col=5)
+points(result$E, type='l', lty=3, col=6)
+axis(side=1, at=1:8, labels=row.names(result))
+legend(x="bottomright", legend=c("Total", 'A', 'B', 'C', 'D', 'E'), col=c(1,2,3,4,5,6), lty=c(1,3,3,3,3,3),  cex=0.6)
+```
+
+# 
+
+```{r, echo=FALSE}
+result
+```
+
+# 
+
+
