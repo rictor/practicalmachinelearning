@@ -413,6 +413,21 @@ pred.rf    &lt;- predict(fit.rf   , validate)</code></pre>
 </div>
 <div id="section-57" class="section level1">
 <h1></h1>
+<div id="model-implementation" class="section level3">
+<h3>5. Model Implementation</h3>
+</div>
+</div>
+<div id="section-58" class="section level1">
+<h1></h1>
+<p>Now that the model is chosen and validated let’s fit the model considering the entire training set.</p>
+</div>
+<div id="section-59" class="section level1">
+<h1></h1>
+<pre class="r"><code>fit.rf &lt;- randomForest(x = data[,-53], y = data$classe)</code></pre>
+</div>
+<div id="section-60" class="section level1">
+<h1></h1>
+<p>This model will be applied to the pml-testing dataset.</p>
 </div>
 
 

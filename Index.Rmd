@@ -506,3 +506,20 @@ result
 # 
 
 
+### 5. Model Implementation
+
+# 
+
+Now that the model is chosen and validated let's fit the model considering the entire training set.
+
+# 
+
+```{r}
+
+fit.rf <- randomForest(x = data[,-53], y = data$classe)
+
+```
+
+# 
+
+This model will be applied to the pml-testing dataset.
